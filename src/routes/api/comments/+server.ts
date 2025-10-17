@@ -12,13 +12,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     return json({ error: 'Photo ID and content are required' }, { status: 400 });
   }
 
-  const comment = addComment(photoId, userId, username, content);
+  try {
+    const comment = await addComment(photoId, userId, username, content);
 
-  if (!comment) {
-    return json({ error: 'Photo not found' }, { status: 404 });
+    if (!comment) {
+      return json({ error: 'Photo not found' }, { status: 404 });
+    }
+
+    return json(comment, { status: 201 });
+  } catch (error) {
+    console.error('Failed to add comment:', error);
+    return json({ error: 'Failed to add comment' }, { status: 500 });
   }
-
-  return json(comment, { status: 201 });
 };
 
 export const DELETE: RequestHandler = async ({ request, cookies }) => {
@@ -29,11 +34,16 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
     return json({ error: 'Comment ID is required' }, { status: 400 });
   }
 
-  const success = deleteComment(commentId, userId);
+  try {
+    const success = await deleteComment(commentId, userId);
 
-  if (!success) {
-    return json({ error: 'Comment not found or unauthorized' }, { status: 404 });
+    if (!success) {
+      return json({ error: 'Comment not found or unauthorized' }, { status: 404 });
+    }
+
+    return json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete comment:', error);
+    return json({ error: 'Failed to delete comment' }, { status: 500 });
   }
-
-  return json({ success: true });
 };

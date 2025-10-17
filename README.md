@@ -19,6 +19,7 @@ A modern photo sharing application built with SvelteKit 5, featuring infinite sc
 - **Styling**: Vanilla CSS with modern CSS features
 - **State Management**: Svelte stores
 - **API**: SvelteKit server routes
+- **Storage**: Azure Blob Storage for photos and comments
 
 ## Project Structure
 
@@ -35,7 +36,8 @@ PrahaCodeMonkeys/
 │   │   │   ├── photos.ts             # Photo state management
 │   │   │   └── user.ts               # User state management
 │   │   ├── server/
-│   │   │   └── db.ts                 # Mock database (in-memory)
+│   │   │   ├── db.ts                 # Database logic with Azure integration
+│   │   │   └── azure-storage.ts      # Azure Blob Storage utilities
 │   │   └── types/
 │   │       └── index.ts              # TypeScript interfaces
 │   └── routes/
@@ -57,12 +59,31 @@ PrahaCodeMonkeys/
 
 - Node.js (v20.19, v22.12, or v24+)
 - pnpm (recommended) or npm
+- Azure Storage Account with SAS tokens (for production use)
 
 ### Installation
 
 1. **Clone the repository** (if not already done)
 
-2. **Install dependencies**:
+2. **Configure Azure Blob Storage**:
+   
+   Create a `.env` file in the project root:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Update the `.env` file with your Azure Storage SAS URLs:
+   ```env
+   AZURE_PHOTO_STORAGE_URL=https://your-account.blob.core.windows.net/photo?sp=racwdli&st=...&sig=...
+   AZURE_COMMENT_STORAGE_URL=https://your-account.blob.core.windows.net/comment?sp=racwdli&st=...&sig=...
+   ```
+   
+   **SAS Token Requirements**:
+   - Permissions: `racwdli` (read, add, create, write, delete, list, immutable)
+   - Resource type: Container
+   - Ensure tokens have not expired
+
+3. **Install dependencies**:
    ```bash
    pnpm install
    ```
@@ -71,7 +92,7 @@ PrahaCodeMonkeys/
    npm install
    ```
 
-3. **Start the development server**:
+4. **Start the development server**:
    ```bash
    pnpm dev
    ```
@@ -80,7 +101,48 @@ PrahaCodeMonkeys/
    npm run dev
    ```
 
-4. **Open your browser** and navigate to `http://localhost:5173`
+5. **Open your browser** and navigate to `http://localhost:5173`
+
+## Azure Blob Storage Integration
+
+### How It Works
+
+This application uses Azure Blob Storage for persistent data storage:
+
+- **Photo Container**: Stores uploaded images as blobs
+- **Comment Container**: Stores photo metadata and comments as JSON files
+- **Index Files**: `photos-index.json` and `comments-index.json` maintain the list of all data
+
+### Data Structure
+
+**Photo Blob Naming**: `photo-{photoId}.{extension}` (e.g., `photo-1.jpg`)
+
+**Index Files**:
+- `photos-index.json` - Array of all photo metadata with image URLs
+- `comments-index.json` - Array of all comments
+
+### Getting SAS Tokens
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to your Storage Account
+3. Select **Shared access signature** from the left menu
+4. Configure permissions:
+   - **Allowed services**: Blob
+   - **Allowed resource types**: Container and Object
+   - **Allowed permissions**: Read, Add, Create, Write, Delete, List
+5. Set expiration date
+6. Click **Generate SAS and connection string**
+7. Copy the **Blob service SAS URL**
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_PHOTO_STORAGE_URL` | SAS URL for photo container |
+| `AZURE_COMMENT_STORAGE_URL` | SAS URL for comment container |
+| `AZURE_STORAGE_ACCOUNT` | Storage account name (optional) |
+| `AZURE_PHOTO_CONTAINER` | Photo container name (optional) |
+| `AZURE_COMMENT_CONTAINER` | Comment container name (optional) |
 
 ## Usage Guide
 
@@ -234,18 +296,18 @@ const response = await fetch(`/api/photos?offset=${offset}&limit=10`);
 
 ## Production Considerations
 
-This is a demo application. For production use, consider:
+This application uses Azure Blob Storage for data persistence. For production use, consider:
 
-1. **Database**: Replace in-memory storage with a real database (PostgreSQL, MongoDB, etc.)
-2. **Authentication**: Implement proper user authentication (JWT, OAuth, etc.)
-3. **File Storage**: Use cloud storage for images
-4. **Image Optimization**: Implement image compression and resizing
-5. **Rate Limiting**: Add API rate limiting
-6. **Validation**: Add comprehensive input validation
-7. **Error Handling**: Improve error handling and user feedback
-8. **Testing**: Add unit and integration tests
-9. **Security**: Implement CSRF protection, content security policy, etc.
-10. **Performance**: Add caching, lazy loading, and CDN
+1. **Authentication**: Implement proper user authentication (JWT, OAuth, etc.)
+2. **Database**: Optionally add a relational database for complex queries
+3. **Image Optimization**: Implement image compression and resizing
+4. **Rate Limiting**: Add API rate limiting
+5. **Validation**: Add comprehensive input validation
+6. **Error Handling**: Improve error handling and user feedback
+7. **Testing**: Add unit and integration tests
+8. **Security**: Implement CSRF protection, content security policy, etc.
+9. **Performance**: Add caching, CDN, and optimize Azure calls
+10. **SAS Token Management**: Implement token rotation and secure storage
 
 ## Browser Support
 

@@ -1,177 +1,214 @@
 import type { Photo, User, Comment } from '$lib/types';
+import {
+	uploadPhoto,
+	getPhotosIndex,
+	savePhotosIndex,
+	getCommentsIndex,
+	saveCommentsIndex,
+	dataUrlToArrayBuffer
+} from './azure-storage';
 
-// Mock users
+// Mock users (still in-memory for demo)
 export const users: User[] = [
-  { id: '1', username: 'alice', avatar: '👩' },
-  { id: '2', username: 'bob', avatar: '👨' },
-  { id: '3', username: 'charlie', avatar: '🧑' }
+	{ id: '1', username: 'alice', avatar: '👩' },
+	{ id: '2', username: 'bob', avatar: '👨' },
+	{ id: '3', username: 'charlie', avatar: '🧑' }
 ];
 
-// Mock photos with sample data
-export const photos: Photo[] = [
-  {
-    id: '1',
-    userId: '1',
-    username: 'alice',
-    imageUrl: 'https://picsum.photos/seed/1/800/600',
-    title: 'Beautiful Sunset',
-    description: 'Captured this amazing sunset yesterday',
-    createdAt: new Date('2024-01-15').toISOString(),
-    comments: [
-      {
-        id: 'c1',
-        photoId: '1',
-        userId: '2',
-        username: 'bob',
-        content: 'Wow, stunning colors!',
-        createdAt: new Date('2024-01-15T10:30:00').toISOString()
-      }
-    ]
-  },
-  {
-    id: '2',
-    userId: '2',
-    username: 'bob',
-    imageUrl: 'https://picsum.photos/seed/2/800/600',
-    title: 'Mountain Adventure',
-    description: 'Hiking in the Alps',
-    createdAt: new Date('2024-01-14').toISOString(),
-    comments: []
-  },
-  {
-    id: '3',
-    userId: '1',
-    username: 'alice',
-    imageUrl: 'https://picsum.photos/seed/3/800/600',
-    title: 'City Lights',
-    description: 'Downtown at night',
-    createdAt: new Date('2024-01-13').toISOString(),
-    comments: []
-  },
-  {
-    id: '4',
-    userId: '3',
-    username: 'charlie',
-    imageUrl: 'https://picsum.photos/seed/4/800/600',
-    title: 'Ocean Waves',
-    description: 'Peaceful morning at the beach',
-    createdAt: new Date('2024-01-12').toISOString(),
-    comments: []
-  },
-  {
-    id: '5',
-    userId: '2',
-    username: 'bob',
-    imageUrl: 'https://picsum.photos/seed/5/800/600',
-    title: 'Forest Path',
-    description: 'Lost in nature',
-    createdAt: new Date('2024-01-11').toISOString(),
-    comments: []
-  },
-  {
-    id: '6',
-    userId: '1',
-    username: 'alice',
-    imageUrl: 'https://picsum.photos/seed/6/800/600',
-    title: 'Desert Dunes',
-    description: 'Sahara expedition',
-    createdAt: new Date('2024-01-10').toISOString(),
-    comments: []
-  }
-];
-
-let photoIdCounter = photos.length + 1;
+// In-memory cache to reduce Azure calls during a session
+let photosCache: Photo[] = [];
+let photoIdCounter = 1;
 let commentIdCounter = 100;
+let cacheInitialized = false;
 
-export function getPhotos(offset: number = 0, limit: number = 10): Photo[] {
-  return photos
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(offset, offset + limit);
+/**
+ * Initialize cache from Azure Storage
+ */
+async function initializeCache() {
+	if (cacheInitialized) return;
+
+	try {
+		photosCache = await getPhotosIndex();
+
+		// Set counters based on existing data
+		if (photosCache.length > 0) {
+			const maxPhotoId = Math.max(...photosCache.map(p => parseInt(p.id) || 0));
+			photoIdCounter = maxPhotoId + 1;
+
+			const allComments = photosCache.flatMap(p => p.comments);
+			if (allComments.length > 0) {
+				const maxCommentId = Math.max(...allComments.map(c => parseInt(c.id) || 0));
+				commentIdCounter = maxCommentId + 1;
+			}
+		}
+
+		cacheInitialized = true;
+	} catch (error) {
+		console.error('Failed to initialize cache from Azure:', error);
+		photosCache = [];
+		cacheInitialized = true;
+	}
 }
 
-export function getPhotoById(id: string): Photo | undefined {
-  return photos.find((p) => p.id === id);
+/**
+ * Sync cache to Azure Storage
+ */
+async function syncToAzure() {
+	try {
+		await savePhotosIndex(photosCache);
+
+		// Extract and save comments separately
+		const allComments = photosCache.flatMap(p =>
+			p.comments.map(c => ({ ...c, photoId: p.id }))
+		);
+		await saveCommentsIndex(allComments);
+	} catch (error) {
+		console.error('Failed to sync to Azure:', error);
+		throw error;
+	}
 }
 
-export function createPhoto(
-  userId: string,
-  username: string,
-  title: string,
-  imageUrl: string,
-  description?: string
-): Photo {
-  const newPhoto: Photo = {
-    id: String(photoIdCounter++),
-    userId,
-    username,
-    imageUrl,
-    title,
-    description,
-    createdAt: new Date().toISOString(),
-    comments: []
-  };
-  photos.unshift(newPhoto);
-  return newPhoto;
+export async function getPhotos(offset: number = 0, limit: number = 10): Promise<Photo[]> {
+	await initializeCache();
+
+	return photosCache
+		.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+		.slice(offset, offset + limit);
 }
 
-export function updatePhoto(
-  id: string,
-  userId: string,
-  updates: { title?: string; description?: string }
-): Photo | null {
-  const photo = photos.find((p) => p.id === id);
-  if (!photo || photo.userId !== userId) {
-    return null;
-  }
-  if (updates.title !== undefined) photo.title = updates.title;
-  if (updates.description !== undefined) photo.description = updates.description;
-  return photo;
+export async function getPhotoById(id: string): Promise<Photo | undefined> {
+	await initializeCache();
+	return photosCache.find((p) => p.id === id);
 }
 
-export function deletePhoto(id: string, userId: string): boolean {
-  const index = photos.findIndex((p) => p.id === id && p.userId === userId);
-  if (index === -1) {
-    return false;
-  }
-  photos.splice(index, 1);
-  return true;
+export async function createPhoto(
+	userId: string,
+	username: string,
+	title: string,
+	imageDataUrl: string,
+	description?: string
+): Promise<Photo> {
+	await initializeCache();
+
+	const photoId = String(photoIdCounter++);
+
+	// Upload image to Azure Blob Storage
+	let imageUrl: string;
+	try {
+		const { buffer, contentType } = dataUrlToArrayBuffer(imageDataUrl);
+		imageUrl = await uploadPhoto(photoId, buffer, contentType);
+	} catch (error) {
+		console.error('Failed to upload photo to Azure:', error);
+		// Fallback to data URL if upload fails
+		imageUrl = imageDataUrl;
+	}
+
+	const newPhoto: Photo = {
+		id: photoId,
+		userId,
+		username,
+		imageUrl,
+		title,
+		description,
+		createdAt: new Date().toISOString(),
+		comments: []
+	};
+
+	photosCache.unshift(newPhoto);
+
+	// Sync to Azure in background
+	syncToAzure().catch(err => console.error('Background sync failed:', err));
+
+	return newPhoto;
 }
 
-export function addComment(
-  photoId: string,
-  userId: string,
-  username: string,
-  content: string
-): Comment | null {
-  const photo = photos.find((p) => p.id === photoId);
-  if (!photo) {
-    return null;
-  }
-  const comment: Comment = {
-    id: String(commentIdCounter++),
-    photoId,
-    userId,
-    username,
-    content,
-    createdAt: new Date().toISOString()
-  };
-  photo.comments.push(comment);
-  return comment;
+export async function updatePhoto(
+	id: string,
+	userId: string,
+	updates: { title?: string; description?: string }
+): Promise<Photo | null> {
+	await initializeCache();
+
+	const photo = photosCache.find((p) => p.id === id);
+	if (!photo || photo.userId !== userId) {
+		return null;
+	}
+
+	if (updates.title !== undefined) photo.title = updates.title;
+	if (updates.description !== undefined) photo.description = updates.description;
+
+	// Sync to Azure
+	await syncToAzure();
+
+	return photo;
 }
 
-export function deleteComment(commentId: string, userId: string): boolean {
-  for (const photo of photos) {
-    const commentIndex = photo.comments.findIndex(
-      (c) => c.id === commentId && c.userId === userId
-    );
-    if (commentIndex !== -1) {
-      photo.comments.splice(commentIndex, 1);
-      return true;
-    }
-  }
-  return false;
+export async function deletePhoto(id: string, userId: string): Promise<boolean> {
+	await initializeCache();
+
+	const index = photosCache.findIndex((p) => p.id === id && p.userId === userId);
+	if (index === -1) {
+		return false;
+	}
+
+	photosCache.splice(index, 1);
+
+	// Sync to Azure
+	await syncToAzure();
+
+	return true;
+}
+
+export async function addComment(
+	photoId: string,
+	userId: string,
+	username: string,
+	content: string
+): Promise<Comment | null> {
+	await initializeCache();
+
+	const photo = photosCache.find((p) => p.id === photoId);
+	if (!photo) {
+		return null;
+	}
+
+	const comment: Comment = {
+		id: String(commentIdCounter++),
+		photoId,
+		userId,
+		username,
+		content,
+		createdAt: new Date().toISOString()
+	};
+
+	photo.comments.push(comment);
+
+	// Sync to Azure
+	await syncToAzure();
+
+	return comment;
+}
+
+export async function deleteComment(commentId: string, userId: string): Promise<boolean> {
+	await initializeCache();
+
+	for (const photo of photosCache) {
+		const commentIndex = photo.comments.findIndex(
+			(c) => c.id === commentId && c.userId === userId
+		);
+		if (commentIndex !== -1) {
+			photo.comments.splice(commentIndex, 1);
+
+			// Sync to Azure
+			await syncToAzure();
+
+			return true;
+		}
+	}
+
+	return false;
 }
 
 export function getUserById(id: string): User | undefined {
-  return users.find((u) => u.id === id);
+	return users.find((u) => u.id === id);
 }

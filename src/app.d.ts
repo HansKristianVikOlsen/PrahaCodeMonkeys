@@ -10,4 +10,12 @@ declare global {
 	}
 }
 
+declare module '$env/static/private' {
+	export const AZURE_PHOTO_STORAGE_URL: string;
+	export const AZURE_COMMENT_STORAGE_URL: string;
+	export const AZURE_STORAGE_ACCOUNT: string;
+	export const AZURE_PHOTO_CONTAINER: string;
+	export const AZURE_COMMENT_CONTAINER: string;
+}
+
 export {};

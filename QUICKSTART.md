@@ -6,17 +6,22 @@ Get your Photo Sharing App up and running in minutes!
 
 - Node.js v20.19, v22.12, or v24+ ([Download here](https://nodejs.org/))
 - pnpm (recommended) or npm
+- Azure Storage Account with SAS tokens (see [AZURE_SETUP.md](./AZURE_SETUP.md) for details)
 
 ## Installation
 
 ```bash
-# 1. Install dependencies
+# 1. Configure Azure Blob Storage
+cp .env.example .env
+# Edit .env and add your Azure Storage SAS URLs
+
+# 2. Install dependencies
 pnpm install
 
-# 2. Start the development server
+# 3. Start the development server
 pnpm dev
 
-# 3. Open your browser
+# 4. Open your browser
 # Navigate to http://localhost:5173
 ```
 
@@ -53,6 +58,24 @@ In the photo modal:
 
 ## Common Issues
 
+### Missing Azure Configuration
+```
+Error: Cannot find module '$env/static/private'
+```
+**Solution**: Create and configure `.env` file
+```bash
+cp .env.example .env
+# Edit .env with your Azure SAS URLs
+```
+
+### Azure Authentication Error (403)
+```
+Error: Failed to upload blob: 403
+```
+**Solution**: Check your SAS token has not expired and has correct permissions
+- See [AZURE_SETUP.md](./AZURE_SETUP.md) for token generation
+- Ensure permissions include: read, add, create, write, delete, list
+
 ### Node Version Error
 ```
 Error: Unsupported environment
@@ -74,6 +97,7 @@ pnpm dev -- --port 3000
 
 ## What's Next?
 
+- 🔷 Set up Azure Blob Storage: [AZURE_SETUP.md](./AZURE_SETUP.md)
 - 📖 Read the full [README.md](./README.md) for detailed documentation
 - 🔧 Explore the codebase in `/src`
 - 🎨 Customize the UI by editing component styles
@@ -87,4 +111,4 @@ pnpm dev -- --port 3000
 
 ---
 
-**Tip**: The app uses mock data stored in memory. Refreshing the page will reset to default photos!
+**Tip**: The app now uses Azure Blob Storage for persistence! Your photos and comments are saved even after refresh. Make sure your `.env` file is properly configured.

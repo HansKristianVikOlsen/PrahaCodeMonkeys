@@ -6,8 +6,7 @@ import {
 	getCommentsIndex,
 	saveCommentsIndex,
 	dataUrlToArrayBuffer,
-	getPhotoBlobUrl,
-	uploadPhoto
+	getPhotoBlobUrl
 } from './azure-storage';
 
 // Mock users (still in-memory for demo)

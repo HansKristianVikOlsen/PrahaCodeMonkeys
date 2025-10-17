@@ -3,8 +3,11 @@
     import PhotoCard from "$lib/components/PhotoCard.svelte";
     import PhotoModal from "$lib/components/PhotoModal.svelte";
     import UploadForm from "$lib/components/UploadForm.svelte";
-    import UserSwitcher from "$lib/components/UserSwitcher.svelte";
+    import UserMenu from "$lib/components/UserMenu.svelte";
     import { photosStore } from "$lib/stores/photos";
+    import type { PageData } from "./$types";
+
+    let { data }: { data: PageData } = $props();
 
     let showUploadForm = $state(false);
     let loadMoreTrigger: HTMLDivElement;
@@ -56,16 +59,19 @@
 
 <div class="app">
     <header class="header">
-        <div class="container">
-            <h1 class="app-title">📸 Photo Gallery</h1>
-            <p class="app-subtitle">Share your moments with the world</p>
+        <div class="container header-content">
+            <div class="header-text">
+                <h1 class="app-title">📸 Photo Gallery</h1>
+                <p class="app-subtitle">Share your moments with the world</p>
+            </div>
+            {#if data.user}
+                <UserMenu user={data.user} />
+            {/if}
         </div>
     </header>
 
     <main class="main">
         <div class="container">
-            <UserSwitcher />
-
             <div class="upload-section">
                 <button
                     class="toggle-upload-button"
@@ -153,6 +159,17 @@
         max-width: 1200px;
         margin: 0 auto;
         padding: 0 20px;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+    }
+
+    .header-text {
+        flex: 1;
     }
 
     .app-title {
@@ -294,6 +311,12 @@
     @media (max-width: 768px) {
         .header {
             padding: 32px 20px;
+        }
+
+        .header-content {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
         }
 
         .app-title {

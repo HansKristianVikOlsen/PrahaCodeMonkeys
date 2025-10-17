@@ -13,6 +13,8 @@
     "test:azure": "node test-azure.js"
   },
   "dependencies": {
+    "@azure/msal-node": "^3.8.0",
+    "cookie": "^1.0.2",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

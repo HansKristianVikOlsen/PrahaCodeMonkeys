@@ -1,15 +1,16 @@
 # 📸 Photo Sharing Application
 
-A modern photo sharing application built with SvelteKit 5, featuring infinite scrolling, CRUD operations, and real-time commenting.
+A modern photo sharing application built with SvelteKit 5, featuring infinite scrolling, CRUD operations, real-time commenting, and Azure Active Directory authentication.
 
 ## Features
 
+- 🔐 **Azure AD Authentication**: Secure sign-in with Microsoft accounts
 - ✨ **Photo Upload**: Upload photos with title and description
 - 🔄 **Infinite Scrolling**: Seamlessly load more photos as you scroll
 - 👁️ **Photo Modal**: Click any photo to view it in full size with details
 - ✏️ **Edit & Delete**: Photo owners can edit or delete their photos
 - 💬 **Comments**: All users can comment on any photo
-- 👥 **User Management**: Switch between demo users to test different permissions
+- 👤 **User Profiles**: View logged-in user information
 - 📱 **Responsive Design**: Works great on desktop, tablet, and mobile
 
 ## Tech Stack
@@ -19,6 +20,7 @@ A modern photo sharing application built with SvelteKit 5, featuring infinite sc
 - **Styling**: Vanilla CSS with modern CSS features
 - **State Management**: Svelte stores
 - **API**: SvelteKit server routes
+- **Authentication**: Azure Active Directory (Entra ID) with MSAL Node
 - **Storage**: Azure Blob Storage for photos and comments
 
 ## Project Structure
@@ -31,16 +33,25 @@ PrahaCodeMonkeys/
 │   │   │   ├── PhotoCard.svelte      # Individual photo card in grid
 │   │   │   ├── PhotoModal.svelte     # Full-size photo view with comments
 │   │   │   ├── UploadForm.svelte     # Photo upload form
-│   │   │   └── UserSwitcher.svelte   # Demo user switcher
+│   │   │   └── UserMenu.svelte       # User menu with logout
 │   │   ├── stores/
 │   │   │   ├── photos.ts             # Photo state management
 │   │   │   └── user.ts               # User state management
 │   │   ├── server/
+│   │   │   ├── auth/
+│   │   │   │   ├── config.ts         # Azure AD MSAL configuration
+│   │   │   │   └── session.ts        # Session management utilities
 │   │   │   ├── db.ts                 # Database logic with Azure integration
 │   │   │   └── azure-storage.ts      # Azure Blob Storage utilities
 │   │   └── types/
 │   │       └── index.ts              # TypeScript interfaces
 │   └── routes/
+│       ├── auth/
+│       │   ├── login/
+│       │   │   ├── +page.svelte      # Login page
+│       │   │   └── redirect/+server.ts # Azure AD redirect
+│       │   ├── callback/+server.ts   # OAuth callback handler
+│       │   └── logout/+server.ts     # Logout handler
 │       ├── api/
 │       │   ├── photos/
 │       │   │   ├── +server.ts        # GET & POST photos
@@ -48,7 +59,11 @@ PrahaCodeMonkeys/
 │       │   └── comments/
 │       │       └── +server.ts        # POST & DELETE comments
 │       ├── +layout.svelte            # App layout
+│       ├── +layout.server.ts         # Server-side layout load
 │       └── +page.svelte              # Main photo feed page
+├── hooks.server.ts                   # Authentication middleware
+├── AZURE_AD_SETUP.md                 # Azure AD setup guide
+├── AUTHENTICATION.md                 # Authentication documentation
 ├── package.json
 └── README.md
 ```
@@ -59,31 +74,55 @@ PrahaCodeMonkeys/
 
 - Node.js (v20.19, v22.12, or v24+)
 - pnpm (recommended) or npm
-- Azure Storage Account with SAS tokens (for production use)
+- Azure Storage Account with SAS tokens
+- Azure AD (Entra ID) App Registration
 
 ### Installation
 
 1. **Clone the repository** (if not already done)
 
-2. **Configure Azure Blob Storage**:
+2. **Set up Azure AD Authentication**:
+   
+   Follow the comprehensive guide in [AZURE_AD_SETUP.md](./AZURE_AD_SETUP.md) to:
+   - Create an Azure AD App Registration
+   - Configure redirect URIs
+   - Generate client secrets
+   - Set up API permissions
+   
+   Quick summary:
+   - Go to [Azure Portal](https://portal.azure.com)
+   - Navigate to Azure Active Directory > App registrations > New registration
+   - Add redirect URI: `http://localhost:5173/auth/callback`
+   - Create a client secret
+   - Note your Client ID, Tenant ID, and Client Secret
+
+3. **Configure Azure Blob Storage**:
    
    Create a `.env` file in the project root:
    ```bash
    cp .env.example .env
    ```
    
-   Update the `.env` file with your Azure Storage SAS URLs:
+   Update the `.env` file with your Azure credentials:
    ```env
+   # Azure AD Authentication
+   AZURE_AD_CLIENT_ID=your-client-id
+   AZURE_AD_CLIENT_SECRET=your-client-secret
+   AZURE_AD_TENANT_ID=your-tenant-id
+   AZURE_AD_REDIRECT_URI=http://localhost:5173/auth/callback
+   
+   # Azure Blob Storage
    AZURE_PHOTO_STORAGE_URL=https://your-account.blob.core.windows.net/photo?sp=racwdli&st=...&sig=...
    AZURE_COMMENT_STORAGE_URL=https://your-account.blob.core.windows.net/comment?sp=racwdli&st=...&sig=...
    ```
    
-   **SAS Token Requirements**:
-   - Permissions: `racwdli` (read, add, create, write, delete, list, immutable)
-   - Resource type: Container
+   **Requirements**:
+   - Azure AD credentials must be valid
+   - SAS Token Permissions: `racwdli` (read, add, create, write, delete, list, immutable)
+   - SAS Token Resource type: Container
    - Ensure tokens have not expired
 
-3. **Install dependencies**:
+4. **Install dependencies**:
    ```bash
    pnpm install
    ```
@@ -92,7 +131,7 @@ PrahaCodeMonkeys/
    npm install
    ```
 
-4. **Start the development server**:
+5. **Start the development server**:
    ```bash
    pnpm dev
    ```
@@ -101,7 +140,12 @@ PrahaCodeMonkeys/
    npm run dev
    ```
 
-5. **Open your browser** and navigate to `http://localhost:5173`
+6. **Sign in with your Microsoft account**:
+   - Open your browser and navigate to `http://localhost:5173`
+   - You'll be redirected to the login page
+   - Click "Sign in with Microsoft"
+   - Enter your Microsoft/Azure AD credentials
+   - After successful authentication, you'll be redirected to the photo gallery
 
 ## Azure Blob Storage Integration
 
@@ -138,6 +182,10 @@ This application uses Azure Blob Storage for persistent data storage:
 
 | Variable | Description |
 |----------|-------------|
+| `AZURE_AD_CLIENT_ID` | Azure AD application client ID |
+| `AZURE_AD_CLIENT_SECRET` | Azure AD client secret |
+| `AZURE_AD_TENANT_ID` | Azure AD tenant (directory) ID |
+| `AZURE_AD_REDIRECT_URI` | OAuth callback URL |
 | `AZURE_PHOTO_STORAGE_URL` | SAS URL for photo container |
 | `AZURE_COMMENT_STORAGE_URL` | SAS URL for comment container |
 | `AZURE_STORAGE_ACCOUNT` | Storage account name (optional) |
@@ -146,14 +194,18 @@ This application uses Azure Blob Storage for persistent data storage:
 
 ## Usage Guide
 
-### Switching Users (Demo Feature)
+### Authentication
 
-At the top of the page, you'll see a user switcher with three demo users:
-- 👩 **Alice** (User ID: 1)
-- 👨 **Bob** (User ID: 2)
-- 🧑 **Charlie** (User ID: 3)
+When you first visit the application, you'll need to sign in:
 
-Click any user to switch your current identity and test different permissions.
+1. Click **"Sign in with Microsoft"** on the login page
+2. Enter your Microsoft/Azure AD credentials
+3. Grant permissions if prompted
+4. You'll be redirected back to the app
+
+To sign out:
+1. Click your username in the top-right corner
+2. Click **"Sign out"** from the dropdown menu
 
 ### Uploading Photos
 
@@ -296,18 +348,20 @@ const response = await fetch(`/api/photos?offset=${offset}&limit=10`);
 
 ## Production Considerations
 
-This application uses Azure Blob Storage for data persistence. For production use, consider:
+This application uses Azure Blob Storage for data persistence and Azure AD for authentication. For production use, consider:
 
-1. **Authentication**: Implement proper user authentication (JWT, OAuth, etc.)
-2. **Database**: Optionally add a relational database for complex queries
-3. **Image Optimization**: Implement image compression and resizing
-4. **Rate Limiting**: Add API rate limiting
-5. **Validation**: Add comprehensive input validation
-6. **Error Handling**: Improve error handling and user feedback
-7. **Testing**: Add unit and integration tests
-8. **Security**: Implement CSRF protection, content security policy, etc.
-9. **Performance**: Add caching, CDN, and optimize Azure calls
-10. **SAS Token Management**: Implement token rotation and secure storage
+1. **Session Storage**: Replace in-memory sessions with Redis or database
+2. **Secret Management**: Use Azure Key Vault for production secrets
+3. **Database**: Optionally add a relational database for complex queries
+4. **Image Optimization**: Implement image compression and resizing
+5. **Rate Limiting**: Add API rate limiting
+6. **Validation**: Add comprehensive input validation
+7. **Error Handling**: Improve error handling and user feedback
+8. **Testing**: Add unit and integration tests
+9. **Security**: Implement additional security headers and policies
+10. **Performance**: Add caching, CDN, and optimize Azure calls
+11. **SAS Token Management**: Implement token rotation and secure storage
+12. **Monitoring**: Add application insights and logging
 
 ## Browser Support
 
@@ -319,6 +373,14 @@ This application uses Azure Blob Storage for data persistence. For production us
 ## License
 
 MIT
+
+## Documentation
+
+- **[AZURE_AD_SETUP.md](./AZURE_AD_SETUP.md)** - Complete Azure AD setup guide
+- **[AUTHENTICATION.md](./AUTHENTICATION.md)** - Authentication system overview
+- **[AZURE_SETUP.md](./AZURE_SETUP.md)** - Azure Blob Storage setup
+- **[AZURE_INTEGRATION.md](./AZURE_INTEGRATION.md)** - Storage integration details
+- **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Contributing
 

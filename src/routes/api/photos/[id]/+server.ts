@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getPhotoById, updatePhoto, deletePhoto } from '$lib/server/db';
 
@@ -12,8 +12,13 @@ export const GET: RequestHandler = async ({ params }) => {
   return json(photo);
 };
 
-export const PATCH: RequestHandler = async ({ params, request, cookies }) => {
-  const userId = cookies.get('userId') || '1';
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+  // Check authentication
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const userId = locals.user.id;
   const data = await request.json();
 
   try {
@@ -30,8 +35,13 @@ export const PATCH: RequestHandler = async ({ params, request, cookies }) => {
   }
 };
 
-export const DELETE: RequestHandler = async ({ params, cookies }) => {
-  const userId = cookies.get('userId') || '1';
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+  // Check authentication
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const userId = locals.user.id;
 
   try {
     const success = await deletePhoto(params.id, userId);

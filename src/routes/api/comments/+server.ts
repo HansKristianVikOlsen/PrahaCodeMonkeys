@@ -1,10 +1,15 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { addComment, deleteComment } from '$lib/server/db';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
-  const userId = cookies.get('userId') || '1';
-  const username = cookies.get('username') || 'alice';
+export const POST: RequestHandler = async ({ request, locals }) => {
+  // Check authentication
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const userId = locals.user.id;
+  const username = locals.user.username;
 
   const { photoId, content } = await request.json();
 
@@ -26,8 +31,13 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   }
 };
 
-export const DELETE: RequestHandler = async ({ request, cookies }) => {
-  const userId = cookies.get('userId') || '1';
+export const DELETE: RequestHandler = async ({ request, locals }) => {
+  // Check authentication
+  if (!locals.user) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const userId = locals.user.id;
   const { commentId } = await request.json();
 
   if (!commentId) {

@@ -5,7 +5,9 @@ import {
 	savePhotosIndex,
 	getCommentsIndex,
 	saveCommentsIndex,
-	dataUrlToArrayBuffer
+	dataUrlToArrayBuffer,
+	getPhotoBlobUrl,
+	uploadPhoto
 } from './azure-storage';
 
 // Mock users (still in-memory for demo)
@@ -29,6 +31,17 @@ async function initializeCache() {
 
 	try {
 		photosCache = await getPhotosIndex();
+
+		// Ensure all photo URLs have current SAS tokens
+		photosCache = photosCache.map(photo => {
+			// Extract blob name from URL if it's an Azure URL
+			if (photo.imageUrl && photo.imageUrl.includes('blob.core.windows.net/photo/')) {
+				const blobName = photo.imageUrl.split('/photo/')[1].split('?')[0];
+				// Reconstruct URL with current SAS token from .env
+				photo.imageUrl = getPhotoBlobUrl(blobName);
+			}
+			return photo;
+		});
 
 		// Set counters based on existing data
 		if (photosCache.length > 0) {
@@ -99,8 +112,7 @@ export async function createPhoto(
 		imageUrl = await uploadPhoto(photoId, buffer, contentType);
 	} catch (error) {
 		console.error('Failed to upload photo to Azure:', error);
-		// Fallback to data URL if upload fails
-		imageUrl = imageDataUrl;
+		throw new Error('Failed to upload photo to Azure storage');
 	}
 
 	const newPhoto: Photo = {

@@ -37,13 +37,20 @@ export async function uploadBlob(
 		throw new Error(`Failed to upload blob: ${response.status} - ${errorText}`);
 	}
 
-	// Return the public URL without SAS token for reading
-	const publicUrl = blobUrl.split('?')[0];
-
+	// Return the full URL with SAS token for authenticated access
 	return {
-		url: publicUrl,
+		url: blobUrl,
 		blobName
 	};
+}
+
+/**
+ * Get blob URL with SAS token for a photo
+ */
+export function getPhotoBlobUrl(blobName: string): string {
+	const baseUrl = AZURE_PHOTO_STORAGE_URL.split('?')[0];
+	const sasToken = AZURE_PHOTO_STORAGE_URL.split('?')[1];
+	return `${baseUrl}/${blobName}?${sasToken}`;
 }
 
 /**
@@ -56,7 +63,8 @@ export async function uploadPhoto(
 ): Promise<string> {
 	const blobName = `photo-${photoId}.${getExtensionFromContentType(contentType)}`;
 	const result = await uploadBlob(AZURE_PHOTO_STORAGE_URL, blobName, imageData, contentType);
-	return result.url;
+	// Return the full URL with SAS token
+	return getPhotoBlobUrl(blobName);
 }
 
 /**

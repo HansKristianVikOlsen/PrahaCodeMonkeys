@@ -1,149 +1,326 @@
-<script>
-	let photos = [
-		{ id: 1, title: "Photo 1", metadata: "Size: 1024x768, Taken: 2024-01-01" },
-		{ id: 2, title: "Photo 2", metadata: "Size: 800x600, Taken: 2024-02-10" },
-		{ id: 3, title: "Photo 3", metadata: "Size: 1920x1080, Taken: 2024-03-15" }
-	];
+<script lang="ts">
+    import { onMount } from "svelte";
+    import PhotoCard from "$lib/components/PhotoCard.svelte";
+    import PhotoModal from "$lib/components/PhotoModal.svelte";
+    import UploadForm from "$lib/components/UploadForm.svelte";
+    import UserSwitcher from "$lib/components/UserSwitcher.svelte";
+    import { photosStore } from "$lib/stores/photos";
 
-	let selectedPhoto = null;
-	let newComment = "";
-	let comments = {
-		1: ["Nice!", "Amazing!"],
-		2: ["Cool picture."],
-		3: []
-	};
+    let showUploadForm = $state(false);
+    let loadMoreTrigger: HTMLDivElement;
+    let observer: IntersectionObserver;
 
-	function openPhoto(photo) {
-		selectedPhoto = photo;
-	}
+    const state = $derived($photosStore);
 
-	function closePhoto() {
-		selectedPhoto = null;
-	}
+    onMount(() => {
+        // Load initial photos
+        photosStore.loadPhotos(true);
 
-	function addComment() {
-		if (newComment.trim() !== "") {
-			comments[selectedPhoto.id].push(newComment);
-			newComment = "";
-		}
-	}
+        // Set up intersection observer for infinite scrolling
+        observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (entry.isIntersecting && !state.loading && state.hasMore) {
+                    photosStore.loadPhotos();
+                }
+            },
+            {
+                rootMargin: "200px",
+            },
+        );
+
+        if (loadMoreTrigger) {
+            observer.observe(loadMoreTrigger);
+        }
+
+        return () => {
+            if (observer) {
+                observer.disconnect();
+            }
+        };
+    });
+
+    function handlePhotoClick(photo: (typeof state.photos)[0]) {
+        photosStore.openModal(photo);
+    }
+
+    function handleUploadSuccess() {
+        showUploadForm = false;
+    }
 </script>
 
+<svelte:head>
+    <title>Photo Sharing App</title>
+    <meta name="description" content="Share and discover amazing photos" />
+</svelte:head>
+
+<div class="app">
+    <header class="header">
+        <div class="container">
+            <h1 class="app-title">📸 Photo Gallery</h1>
+            <p class="app-subtitle">Share your moments with the world</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <UserSwitcher />
+
+            <div class="upload-section">
+                <button
+                    class="toggle-upload-button"
+                    onclick={() => (showUploadForm = !showUploadForm)}
+                >
+                    {showUploadForm ? "✕ Close" : "➕ Upload New Photo"}
+                </button>
+
+                {#if showUploadForm}
+                    <div class="upload-form-container">
+                        <UploadForm onSuccess={handleUploadSuccess} />
+                    </div>
+                {/if}
+            </div>
+
+            {#if state.photos.length === 0 && !state.loading}
+                <div class="empty-state">
+                    <p class="empty-icon">📷</p>
+                    <h2>No photos yet</h2>
+                    <p>Be the first to upload a photo!</p>
+                </div>
+            {:else}
+                <div class="photo-grid">
+                    {#each state.photos as photo (photo.id)}
+                        <PhotoCard
+                            {photo}
+                            onclick={() => handlePhotoClick(photo)}
+                        />
+                    {/each}
+                </div>
+
+                {#if state.loading}
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading more photos...</p>
+                    </div>
+                {/if}
+
+                {#if !state.hasMore && state.photos.length > 0}
+                    <div class="end-message">
+                        <p>🎉 You've reached the end!</p>
+                    </div>
+                {/if}
+            {/if}
+
+            <div bind:this={loadMoreTrigger} class="load-trigger"></div>
+        </div>
+    </main>
+
+    {#if state.selectedPhoto}
+        <PhotoModal
+            photo={state.selectedPhoto}
+            isOpen={state.isModalOpen}
+            onClose={() => photosStore.closeModal()}
+        />
+    {/if}
+</div>
+
 <style>
-	.top-buttons {
-		display: flex;
-		gap: 1rem;
-		padding: 1rem;
-		background: #f0f0f0;
-		border-radius: 8px;
-		justify-content: center;
-	}
+    :global(body) {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+            Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #f5f5f5;
+        color: #1a1a1a;
+    }
 
-	button {
-		padding: 0.5rem 1rem;
-		border: none;
-		border-radius: 6px;
-		background: #ddd;
-		cursor: pointer;
-		font-size: 1rem;
-	}
+    :global(*) {
+        box-sizing: border-box;
+    }
 
-	.gallery-grid {
-		margin-top: 1rem;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-		gap: 1rem;
-		padding: 1rem;
-	}
+    .app {
+        min-height: 100vh;
+    }
 
-	.grid-item {
-		border: 2px solid white;
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1rem;
-		background: #eee;
-		cursor: pointer;
-	}
+    .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 48px 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-	/* Modal */
-	.modal {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		background: rgba(0, 0, 0, 0.6);
-		display: flex;
-		justify-content: center;
-		align-items: center;
-	}
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
 
-	.modal-content {
-		background: white;
-		padding: 1.5rem;
-		border-radius: 10px;
-		width: 400px;
-		max-height: 80vh;
-		overflow-y: auto;
-	}
+    .app-title {
+        margin: 0 0 8px 0;
+        font-size: 42px;
+        font-weight: 800;
+        text-align: center;
+    }
+
+    .app-subtitle {
+        margin: 0;
+        font-size: 18px;
+        text-align: center;
+        opacity: 0.95;
+    }
+
+    .main {
+        padding: 32px 0 64px;
+    }
+
+    .upload-section {
+        margin-bottom: 32px;
+    }
+
+    .toggle-upload-button {
+        width: 100%;
+        padding: 16px 24px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+    }
+
+    .toggle-upload-button:hover {
+        background: #0052a3;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 102, 204, 0.4);
+    }
+
+    .upload-form-container {
+        margin-top: 16px;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .photo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 24px;
+        margin-bottom: 32px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 80px 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-icon {
+        font-size: 64px;
+        margin: 0 0 16px 0;
+    }
+
+    .empty-state h2 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+        color: #1a1a1a;
+    }
+
+    .empty-state p {
+        margin: 0;
+        font-size: 16px;
+        color: #666;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 16px;
+        border: 4px solid #f0f0f0;
+        border-top: 4px solid #0066cc;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .loading p {
+        margin: 0;
+        color: #666;
+        font-size: 14px;
+    }
+
+    .end-message {
+        text-align: center;
+        padding: 32px 20px;
+        color: #666;
+        font-size: 16px;
+    }
+
+    .end-message p {
+        margin: 0;
+    }
+
+    .load-trigger {
+        height: 20px;
+        visibility: hidden;
+    }
+
+    @media (max-width: 768px) {
+        .header {
+            padding: 32px 20px;
+        }
+
+        .app-title {
+            font-size: 32px;
+        }
+
+        .app-subtitle {
+            font-size: 16px;
+        }
+
+        .photo-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+        }
+
+        .main {
+            padding: 24px 0 48px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .photo-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .container {
+            padding: 0 16px;
+        }
+    }
 </style>
-
-<!-- Top Button Box -->
-<div class="top-buttons">
-	<button>Galleri</button>
-	<button>Mine bilder</button>
-	<button>Profil</button>
-</div>
-
-<!-- Grid Box -->
-<div class="gallery-grid">
-	{#each photos as photo}
-		<div class="grid-item" on:click={() => openPhoto(photo)}>
-			<!-- Placeholder SVG -->
-			<svg width="50" height="50" viewBox="0 0 24 24">
-				<circle cx="12" cy="12" r="10" stroke="black" stroke-width="2" fill="none"/>
-				<line x1="8" y1="12" x2="16" y2="12" stroke="black" stroke-width="2"/>
-			</svg>
-		</div>
-	{/each}
-</div>
-
-<!-- Modal for Photo View -->
-{#if selectedPhoto}
-	<div class="modal" on:click={closePhoto}>
-		<div class="modal-content" on:click|stopPropagation>
-			<h2>{selectedPhoto.title}</h2>
-
-			<!-- Photo placeholder -->
-			<svg width="100%" height="150" viewBox="0 0 24 24">
-				<rect x="2" y="2" width="20" height="20" fill="#ccc" />
-			</svg>
-
-			<!-- Thumbs -->
-			<div style="margin-top: 1rem; display: flex; gap: 1rem;">
-				<button>👍</button>
-				<button>👎</button>
-			</div>
-
-			<!-- Metadata -->
-			<p style="margin-top: 1rem;"><strong>Metadata:</strong> {selectedPhoto.metadata}</p>
-
-			<!-- Comments -->
-			<h3>Comments</h3>
-			{#each comments[selectedPhoto.id] as comment}
-				<p>• {comment}</p>
-			{/each}
-
-			<input
-				bind:value={newComment}
-				placeholder="Add a comment..."
-				style="width:100%; margin-top:0.5rem;"
-			/>
-			<button on:click={addComment} style="margin-top:0.5rem;">Add Comment</button>
-
-			<button on:click={closePhoto} style="margin-top:1rem; width:100%;">Close</button>
-		</div>
-	</div>
-{/if}

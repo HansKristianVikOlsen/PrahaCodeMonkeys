@@ -309,6 +309,10 @@ This application uses Azure Blob Storage for data persistence. For production us
 9. **Performance**: Add caching, CDN, and optimize Azure calls
 10. **SAS Token Management**: Implement token rotation and secure storage
 
+### GitHub Secrets for CI/CD
+
+For automated deployment with environment variables, see [GITHUB_SECRETS_SETUP.md](./GITHUB_SECRETS_SETUP.md) for instructions on configuring GitHub secrets for automatic `.env` file generation during deployment.
+
 ## Browser Support
 
 - Chrome/Edge (latest)

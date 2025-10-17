@@ -23,6 +23,24 @@ jobs:
         with:
           node-version: '22.x'
 
+      - name: Create .env file from GitHub secrets
+        run: |
+          cat > .env << EOF
+          # Azure Blob Storage Configuration
+          # This file is created from GitHub secrets during CI/CD
+          
+          # Photo Storage Container URL with SAS token
+          AZURE_PHOTO_STORAGE_URL=${{ secrets.AZURE_PHOTO_STORAGE_URL }}
+          
+          # Comment Storage Container URL with SAS token
+          AZURE_COMMENT_STORAGE_URL=${{ secrets.AZURE_COMMENT_STORAGE_URL }}
+          
+          # Azure Storage Account Details
+          AZURE_STORAGE_ACCOUNT=${{ secrets.AZURE_STORAGE_ACCOUNT }}
+          AZURE_PHOTO_CONTAINER=${{ secrets.AZURE_PHOTO_CONTAINER }}
+          AZURE_COMMENT_CONTAINER=${{ secrets.AZURE_COMMENT_CONTAINER }}
+          EOF
+
       - name: npm install, build, and test
         run: |
           npm install

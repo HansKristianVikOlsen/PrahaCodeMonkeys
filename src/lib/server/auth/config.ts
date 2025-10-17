@@ -1,60 +1,78 @@
+import 'dotenv/config';
 import { ConfidentialClientApplication, type Configuration } from '@azure/msal-node';
+import {
+  AZURE_AD_CLIENT_ID,
+  AZURE_AD_CLIENT_SECRET,
+  AZURE_AD_TENANT_ID,
+  AZURE_AD_REDIRECT_URI
+} from '$env/static/private';
 
-// Environment variables for Azure AD
-const AZURE_AD_CLIENT_ID = process.env.AZURE_AD_CLIENT_ID || '';
-const AZURE_AD_CLIENT_SECRET = process.env.AZURE_AD_CLIENT_SECRET || '';
-const AZURE_AD_TENANT_ID = process.env.AZURE_AD_TENANT_ID || '';
-const AZURE_AD_REDIRECT_URI = process.env.AZURE_AD_REDIRECT_URI || 'http://localhost:5173/auth/callback';
+// Normalize and assign environment variables
+const clientId = (AZURE_AD_CLIENT_ID || '').trim();
+const clientSecret = (AZURE_AD_CLIENT_SECRET || '').trim();
+const tenantId = (AZURE_AD_TENANT_ID || '').trim();
+const redirectUri = (AZURE_AD_REDIRECT_URI || 'http://localhost:5173/auth/callback').trim();
 
-// MSAL Configuration
+// Validate configuration early
+export function validateAuthConfig(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!clientId) {
+    errors.push('AZURE_AD_CLIENT_ID is not set');
+  }
+  if (!clientSecret) {
+    errors.push('AZURE_AD_CLIENT_SECRET is not set');
+  }
+  if (!tenantId) {
+    errors.push('AZURE_AD_TENANT_ID is not set');
+  }
+  if (!redirectUri) {
+    errors.push('AZURE_AD_REDIRECT_URI is not set');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+const { valid, errors } = validateAuthConfig();
+
+if (!valid) {
+  console.error('[Auth] Azure AD configuration errors:', errors);
+  // Throwing here prevents MSAL from constructing with empty secret and producing a less helpful error
+  throw new Error('Azure AD configuration invalid. Missing: ' + errors.join(', '));
+} else {
+  console.log(
+    `[Auth] Azure AD config loaded: clientId=${clientId}, tenantId=${tenantId}, redirectUri=${redirectUri}`
+  );
+}
+
+// MSAL Configuration (only executed if validation passed)
 const msalConfig: Configuration = {
   auth: {
-    clientId: AZURE_AD_CLIENT_ID,
-    authority: `https://login.microsoftonline.com/${AZURE_AD_TENANT_ID}`,
-    clientSecret: AZURE_AD_CLIENT_SECRET,
+    clientId,
+    authority: `https://login.microsoftonline.com/${tenantId}`,
+    clientSecret
   },
   system: {
     loggerOptions: {
       loggerCallback(loglevel, message, containsPii) {
-        if (containsPii) {
-          return;
-        }
-        console.log(message);
+        if (containsPii) return;
+        // MSAL internal log messages
+        console.log('[MSAL]', message);
       },
       piiLoggingEnabled: false,
-      logLevel: 3, // Info
-    },
-  },
+      logLevel: 3 // Info
+    }
+  }
 };
 
 // Create MSAL client instance
 export const msalClient = new ConfidentialClientApplication(msalConfig);
 
 // Authentication scopes
-export const SCOPES = ['user.read'];
+export const SCOPES = ['User.Read'];
 
-// Redirect URI
-export const REDIRECT_URI = AZURE_AD_REDIRECT_URI;
-
-// Validate configuration
-export function validateAuthConfig(): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (!AZURE_AD_CLIENT_ID) {
-    errors.push('AZURE_AD_CLIENT_ID is not set');
-  }
-  if (!AZURE_AD_CLIENT_SECRET) {
-    errors.push('AZURE_AD_CLIENT_SECRET is not set');
-  }
-  if (!AZURE_AD_TENANT_ID) {
-    errors.push('AZURE_AD_TENANT_ID is not set');
-  }
-  if (!AZURE_AD_REDIRECT_URI) {
-    errors.push('AZURE_AD_REDIRECT_URI is not set');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}
+// Redirect URI export
+export const REDIRECT_URI = redirectUri;
